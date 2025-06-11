@@ -1,75 +1,63 @@
 import streamlit as st
 import pandas as pd
 from io import BytesIO
+import os
 from openpyxl import Workbook
 from streamlit_sortables import sort_items
 
-st.set_page_config(page_title="SPDO - App SCI", layout="wide",page_icon="logo_fgv.png")
-st.title("SCI - App Ajuste de Entrada de Dados")
+st.set_page_config(page_title="SPDO - App SCI", layout="wide", page_icon="logo_fgv.png")
+st.title("SCI – Ajuste de Entrada de Dados")
+
 
 st.logo("logo_ibre.png")
-# 2) Uploader para o usuário enviar o Excel
-uploaded_file = st.file_uploader(
-    "Envie um arquivo Excel (.xlsx ou .xls):",
-    type=["xlsx", "xls"]
-)
+# ─── Sidebar ─────────────────────────────────────────────────────
+with st.sidebar:
+    st.header("1. Envio e pré-configuração")
+    uploaded_file = st.file_uploader("Envie um Excel:", type=["xlsx", "xls"])
+    if uploaded_file:
+        nome_sem_ext = os.path.splitext(uploaded_file.name)[0]
+        df = pd.read_excel(uploaded_file)
 
-if uploaded_file is not None:
-    try:
-        df = pd.read_excel(uploaded_file, sheet_name=0)
-    except Exception as e:
-        st.error(f"Não foi possível ler o arquivo como Excel: {e}")
-        st.stop()
+        st.markdown("---")
+        st.subheader("2. Organize as colunas")
+        containers = [
+            {"header": "Usadas",    "items": list(df.columns)},
+            {"header": "Ignoradas", "items": []}
+        ]
+        conts = sort_items(containers, multi_containers=True)
 
-    colunas_originais = list(df.columns)
+        st.markdown("**3. Renomeie**")
+        df_map = pd.DataFrame({
+            "antigo": conts[0]["items"],
+            "novo":   conts[0]["items"]
+        })
+        df_map_edit = st.data_editor(df_map, 
+                                     num_rows="fixed", 
+                                     disabled=["antigo"], 
+                                     hide_index=True)
+        rename_map = dict(zip(df_map_edit["antigo"], df_map_edit["novo"]))
+        st.session_state.df_filtrado = df[conts[0]["items"]].rename(columns=rename_map)
+        st.session_state.nome_arquivo   = nome_sem_ext
 
-    columns_padrão = "Solicitação | Código CI ext. | JOB | Código Elementar | Código Ins. Inf. | Tipo Insumo | Código Externo | Serviço | Descrição | Elementar | Descrição | Ins. Inf. | Código | Informante | Descrição | Informante | Última Mensagem "
-    st.write(f'**Padrão das colunas a se seguir para reorganizar:** {columns_padrão}')
-    # 1) Definindo os dois containers:
-    containers = [
-        {
-            'header': 'Colunas Utilizadas:',
-            'items': colunas_originais  # começam todas aqui
-        },
-        {
-            'header': 'Colunas Ignoradas:',
-            'items': []  # inicialmente vazio
-        }
-    ]
+# ─── Corpo principal ──────────────────────────────────────────────
+if "df_filtrado" in st.session_state:
+    st.subheader("Preview da planilha ajustada")
+    st.data_editor(st.session_state.df_filtrado, use_container_width=True, disabled=True, hide_index=True)
 
-    # 2) Renderizando os dois painéis para drag & drop:
-    containers_ordenados = sort_items(
-        containers,
-        multi_containers=True,
-    )
-
-    # 3) Extraindo as listas aprovadas e rejeitadas:
-    colunas_usadas     = containers_ordenados[0]['items']
-    colunas_ignoradas = containers_ordenados[1]['items']
-
-    # 4) Reordenando e filtrando o DataFrame:
-    df_filtrado = df[colunas_usadas]
-
-    st.markdown("### Planilha Reorganizada")
-    st.dataframe(df_filtrado)
-
+    st.markdown("### ⬇️ Baixar resultado")
+    buffer = BytesIO()
     wb = Workbook()
-    primeira_aba = wb.active
-    wb.remove(primeira_aba)
+    wb.remove(wb.active)
     wb.create_sheet("Planilha1")
-
-    temp_stream = BytesIO()
-    wb.save(temp_stream)
-    temp_stream.seek(0)
-    with pd.ExcelWriter(temp_stream, engine="openpyxl", mode="a", if_sheet_exists="replace") as writer:
-        df_filtrado.to_excel(writer, index=False, sheet_name="Planilha1")
-    processed_data = temp_stream.getvalue()
+    wb.save(buffer)
+    buffer.seek(0)
+    with pd.ExcelWriter(buffer, engine="openpyxl", mode="a", if_sheet_exists="replace") as w:
+        st.session_state.df_filtrado.to_excel(w, index=False, sheet_name="Planilha1")
+    buffer.seek(0)
 
     st.download_button(
-            label="⬇️ Excel Reorganizado",
-            data=processed_data,
-            file_name="arquivo_reordenado.xlsx",
-            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        "Download Excel",
+        data=buffer.getvalue(),
+        file_name=f"{st.session_state.nome_arquivo} - Reorganizado.xlsx",
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     )
-
-        
