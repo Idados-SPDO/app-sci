@@ -4,9 +4,10 @@ from io import BytesIO
 from openpyxl import Workbook
 from streamlit_sortables import sort_items
 
-st.set_page_config(page_title="Validação + Reordenação com Sortables", layout="wide")
+st.set_page_config(page_title="SPDO - App SCI", layout="wide",page_icon="logo_fgv.png")
 st.title("SCI - App Ajuste de Entrada de Dados")
 
+st.logo("logo_ibre.png")
 # 2) Uploader para o usuário enviar o Excel
 uploaded_file = st.file_uploader(
     "Envie um arquivo Excel (.xlsx ou .xls):",
